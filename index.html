@@ -185,18 +185,19 @@
         <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
         <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
       </select>
-      <label class="lbl" for="f-alergias">Alergias y condiciones médicas</label>
-      <textarea id="f-alergias" class="field" maxlength="600"></textarea>
+      <label class="lbl" for="f-alergias">Alergias</label>
+      <textarea id="f-alergias" class="field" maxlength="600" placeholder="Ej. penicilina, mariscos"></textarea>
+      <label class="lbl" for="f-enf">¿Padece alguna enfermedad?</label>
+      <select id="f-enf" class="field"><option value="no">No</option><option value="si">Sí</option></select>
+      <textarea id="f-enf-txt" class="field hidden" maxlength="600" placeholder="¿Cuál(es)? Ej. diabetes, hipertensión, epilepsia"></textarea>
       <label class="lbl" for="f-contacto1_nombre">Contacto de emergencia (nombre)</label>
       <input id="f-contacto1_nombre" class="field" maxlength="80">
-      <label class="lbl" for="f-contacto1_tel">Teléfono con código de país</label>
-      <input id="f-contacto1_tel" class="field" type="tel" inputmode="numeric" placeholder="527751234567">
+      <label class="lbl" for="f-pais">País del teléfono</label>
+      <select id="f-pais" class="field"></select>
+      <label class="lbl" for="f-tel">Número de teléfono</label>
+      <input id="f-tel" class="field" type="tel" inputmode="numeric" placeholder="Solo números, sin el código" autocomplete="tel-national">
       <label class="lbl" for="f-mensaje_extra">Información adicional</label>
       <textarea id="f-mensaje_extra" class="field" maxlength="600"></textarea>
-      <div id="f-pin-wrap">
-        <label class="lbl" for="f-pin">Elige una clave (4 a 8 números)</label>
-        <input id="f-pin" class="field" type="password" inputmode="numeric" maxlength="8" autocomplete="new-password">
-      </div>
       <div id="ed-msg" class="msg"></div>
       <div class="stack">
         <button id="ed-save" class="btn btn-call" type="button">Guardar ficha</button>
@@ -215,7 +216,7 @@
         <button id="done-copy" class="btn btn-call" type="button">Copiar enlace</button>
         <a id="done-view" class="btn btn-ghost" href="#">Ver mi ficha</a>
       </div>
-      <div class="keybox">Guarda estos datos para poder editar tu ficha:<br>
+      <div class="keybox">Estos datos son para editar tu ficha. Guárdalos, la clave no se puede recuperar:<br>
         Número de ficha: <b id="done-id"></b><br>Clave: <b id="done-pin"></b></div>
     </section>
   </main>
@@ -325,8 +326,11 @@ function render(p) {
   if (p.sangre) html += `<div class="blood"><small>Tipo de<br>sangre</small><strong>${esc(p.sangre)}</strong></div>`;
   html += "</section>";
 
-  html += `<section class="card medical"><h2>${ICON_ALERT} Alergias / condiciones médicas</h2>
-    <p>${esc(p.alergias) || "Ninguna registrada"}</p></section>`;
+  const enf = (p.enfermedades || "").trim();
+  html += `<section class="card medical"><h2>${ICON_ALERT} Alergias</h2>
+    <p>${esc(p.alergias) || "Ninguna registrada"}</p>
+    <h2 style="margin-top:14px">${ICON_ALERT} Enfermedades</h2>
+    <p>${!enf ? "No indicado" : /^no$/i.test(enf) ? "Ninguna declarada" : esc(enf)}</p></section>`;
 
   if (p.audio) {
     html += `<section class="card">
@@ -473,15 +477,31 @@ async function doLogin() {
 }
 
 /* Editor */
-const FIELDS = ["nombre", "sangre", "alergias", "contacto1_nombre", "contacto1_tel", "mensaje_extra"];
+const FIELDS = ["nombre", "sangre", "alergias", "contacto1_nombre", "mensaje_extra"];
+const COUNTRIES = [["México",52],["Estados Unidos / Canadá",1],["Guatemala",502],["El Salvador",503],["Honduras",504],
+  ["Nicaragua",505],["Costa Rica",506],["Panamá",507],["Cuba",53],["Colombia",57],["Venezuela",58],["Ecuador",593],
+  ["Perú",51],["Bolivia",591],["Chile",56],["Argentina",54],["Uruguay",598],["Paraguay",595],["Brasil",55],
+  ["España",34],["Francia",33],["Italia",39],["Alemania",49],["Reino Unido",44],["Portugal",351]];
+function fillCountries() {
+  $("f-pais").innerHTML = COUNTRIES.map(c => `<option value="${c[1]}">${c[0]} (+${c[1]})</option>`).join("");
+}
+function splitTel(t) {
+  t = digits(t);
+  const codes = [...new Set(COUNTRIES.map(c => String(c[1])))].sort((a, b) => b.length - a.length);
+  for (const c of codes) if (t.startsWith(c)) return [c, t.slice(c.length)];
+  return ["52", t];
+}
 let ED = {};
 function openEditor(o) {
   ED = { mode: o.mode, id: o.id, pin: o.pin, foto: null };
   const d = o.data || {};
   $("ed-title").textContent = o.mode === "create" ? "Crea tu ficha de emergencia" : "Edita tu ficha";
   FIELDS.forEach(k => $("f-" + k).value = d[k] || "");
-  $("f-pin").value = "";
-  $("f-pin-wrap").classList.toggle("hidden", o.mode !== "create");
+  const [cod, num] = splitTel(d.contacto1_tel || "");
+  $("f-pais").value = cod; $("f-tel").value = num;
+  const enf = (d.enfermedades || "").trim(), tiene = enf && !/^no$/i.test(enf);
+  $("f-enf").value = tiene ? "si" : "no"; $("f-enf-txt").value = tiene ? enf : "";
+  $("f-enf-txt").classList.toggle("hidden", !tiene);
   const pv = $("ed-photo");
   if (d.foto) { pv.src = directLink(d.foto); pv.classList.remove("hidden"); }
   else { pv.removeAttribute("src"); pv.classList.add("hidden"); }
@@ -491,22 +511,25 @@ function openEditor(o) {
 async function saveEditor() {
   const data = {};
   FIELDS.forEach(k => data[k] = $("f-" + k).value.trim());
-  data.contacto1_tel = digits(data.contacto1_tel);
+  const cod = $("f-pais").value, num = digits($("f-tel").value).replace(/^0+/, "");
   if (!data.nombre) return setMsg("ed-msg", "Escribe tu nombre.", "err");
-  if (data.contacto1_tel.length < 10)
-    return setMsg("ed-msg", "Escribe el teléfono con código de país, solo números (ej. 527751234567).", "err");
+  if (cod === "52" && num.length !== 10) return setMsg("ed-msg", "En México el número tiene 10 dígitos.", "err");
+  if (num.length < 7 || (cod + num).length > 15) return setMsg("ed-msg", "Revisa el número de teléfono.", "err");
+  data.contacto1_tel = cod + num;
+  if ($("f-enf").value === "si") {
+    data.enfermedades = $("f-enf-txt").value.trim();
+    if (!data.enfermedades) return setMsg("ed-msg", "Escribe qué enfermedad padece.", "err");
+  } else data.enfermedades = "No";
   if (ED.foto) data.foto = ED.foto;
   let body;
   if (ED.mode === "create") {
-    const pin = $("f-pin").value.trim();
-    if (!/^\d{4,8}$/.test(pin)) return setMsg("ed-msg", ERR.pin, "err");
-    ED.pin = pin; body = { action: "register", pin, data };
+    body = { action: "register", data };
   } else body = { action: "update", id: ED.id, pin: ED.pin, data };
   $("ed-save").disabled = true; setMsg("ed-msg", "Guardando…");
   try {
     const r = await api(body);
     if (!r.ok) throw new Error(r.error);
-    showDone(r.id || ED.id, ED.pin);
+    showDone(r.id || ED.id, r.pin || ED.pin);
   } catch (e) { $("ed-save").disabled = false; setMsg("ed-msg", errText(e.message), "err"); }
 }
 function showDone(id, pin) {
@@ -546,6 +569,8 @@ async function fetchProfile(id) {
 }
 
 async function init() {
+  fillCountries();
+  $("f-enf").onchange = () => $("f-enf-txt").classList.toggle("hidden", $("f-enf").value !== "si");
   $("go-create").onclick = () => openEditor({ mode: "create" });
   $("go-login").onclick = () => $("login").classList.toggle("hidden");
   $("login-btn").onclick = doLogin;
@@ -575,3 +600,4 @@ init();
 </script>
 </body>
 </html>
+
