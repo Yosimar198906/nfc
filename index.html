@@ -248,7 +248,7 @@ const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1SkEGWTWBgAO25VSWR
 
 /* URL de tu Apps Script (Implementar → Aplicación web). Guía en apps_script.gs.
    Si la dejas sin configurar, el botón de cambiar foto no aparece. */
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyFdtckY0Z3bsqD41xSy5dZpJczyDRrJORe8JOPHSq1kMrARqLFoDG12yjnJX4en9XhKA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzj9o2_nvWUqKO7CW87CxRFPKZsyMqURaTdbsrbO4xsUtVwDx8UHGD6aiDcIaYda1LZhA/exec";
 
 /* ---------- Utilidades ---------- */
 const $ = (id) => document.getElementById(id);
@@ -455,7 +455,7 @@ async function api(body) {
     headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
   return r.json();
 }
-const ERR = { clave: "Clave incorrecta.", id: "No existe esa ficha.",
+const ERR = { server: "Error en el servidor (Apps Script). Revisa la hoja y la implementación.", clave: "Clave incorrecta.", id: "No existe esa ficha.",
   bloqueado: "Demasiados intentos. Espera 15 minutos.",
   datos: "Revisa los datos: nombre y teléfono son obligatorios.",
   pin: "La clave debe tener de 4 a 8 números.", foto: "La foto es demasiado grande. Elige otra." };
@@ -528,7 +528,7 @@ async function saveEditor() {
   $("ed-save").disabled = true; setMsg("ed-msg", "Guardando…");
   try {
     const r = await api(body);
-    if (!r.ok) throw new Error(r.error);
+    if (!r.ok) { console.error("Apps Script:", r); throw new Error(r.error); }
     showDone(r.id || ED.id, r.pin || ED.pin);
   } catch (e) { $("ed-save").disabled = false; setMsg("ed-msg", errText(e.message), "err"); }
 }
